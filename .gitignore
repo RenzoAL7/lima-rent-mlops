@@ -1,0 +1,26 @@
+cat > .gitignore << 'EOF'
+# Entorno virtual (se regenera con `uv sync`)
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Datos: no se publican datos crudos (decisión del proyecto)
+data/
+
+# MLflow local
+mlruns/
+mlartifacts/
+
+# Secretos
+.env
+
+# macOS
+.DS_Store
+EOF
