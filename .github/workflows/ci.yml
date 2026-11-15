@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Calidad y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Instalar dependencias
+        run: make install
+      - name: Análisis estático
+        run: make check
+      - name: Pruebas (datos sintéticos, sin internet)
+        run: make test
+      - name: Dos semanas simuladas de punta a punta
+        # Semana 1 entrena el modelo inicial; semana 2 trae drift y debe disparar el
+        # reentrenamiento. Mismo comando que corre el CronJob en el clúster.
+        run: make smoke
+      - name: Renderizar manifiestos y compose
+        run: |
+          make render
+          docker compose -f deploy/compose/docker-compose.yml config -q

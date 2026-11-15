@@ -1,0 +1,110 @@
+# Todo el sistema en el Mac, imitando la nube:
+#   SeaweedFS  -> OCI Object Storage (misma API S3)
+#   Postgres   -> base de datos de MLflow
+#   mlflow     -> tracking + registry, artefactos en el bucket
+#   api        -> FastAPI (lee el champion del bucket)
+#   dashboard  -> Streamlit
+#   pipeline   -> corrida semanal (se lanza a mano: perfil "jobs")
+#
+# Uso (desde la raíz del repo):
+#   docker compose -f deploy/compose/docker-compose.yml up -d --build
+#   docker compose -f deploy/compose/docker-compose.yml run --rm pipeline lima-rent weekly --fixture 800
+#   Dashboard: http://localhost:8501 · API: http://localhost:8080/api/docs
+#   MLflow: http://localhost:5001 · S3: http://localhost:8333 (local / local-secret)
+
+x-s3: &s3
+  DATA_URI: s3://lima-rent-mlops
+  S3_ENDPOINT_URL: http://s3:8333
+  S3_REGION: us-east-1
+  S3_ACCESS_KEY_ID: local
+  S3_SECRET_ACCESS_KEY: local-secret
+
+name: lima-rent
+
+services:
+  # SeaweedFS: almacenamiento con API S3 (Apache-2.0). Reemplaza a MinIO, que dejó de
+  # publicar imágenes de su edición comunitaria.
+  s3:
+    image: chrislusf/seaweedfs:4.52
+    command: >
+      server -dir=/data -ip.bind=0.0.0.0 -master.volumeSizeLimitMB=256
+      -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports: ["8333:8333"]
+    volumes:
+      - s3:/data
+      - ./seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8333/healthz"]
+      interval: 5s
+      retries: 30
+
+  create-bucket:
+    image: chrislusf/seaweedfs:4.52
+    depends_on:
+      s3: {condition: service_healthy}
+    entrypoint: >
+      sh -c "echo 's3.bucket.list' | weed shell -master=s3:9333 | grep -q lima-rent-mlops ||
+             echo 's3.bucket.create -name lima-rent-mlops' | weed shell -master=s3:9333"
+
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+      POSTGRES_DB: mlflow
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mlflow"]
+      interval: 5s
+      retries: 20
+
+  mlflow:
+    build: {context: ../.., dockerfile: docker/mlflow.Dockerfile}
+    image: ghcr.io/renzoal7/lima-rent-mlflow:local
+    depends_on:
+      postgres: {condition: service_healthy}
+      create-bucket: {condition: service_completed_successfully}
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@postgres:5432/mlflow
+      MLFLOW_ARTIFACTS_DESTINATION: s3://lima-rent-mlops/mlflow-artifacts
+      MLFLOW_ALLOWED_HOSTS: mlflow,mlflow:5000,localhost,localhost:5001
+      MLFLOW_S3_ENDPOINT_URL: http://s3:8333
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local-secret
+      AWS_DEFAULT_REGION: us-east-1
+    ports: ["5001:5000"]
+
+  api:
+    build: {context: ../.., dockerfile: docker/api.Dockerfile}
+    image: ghcr.io/renzoal7/lima-rent-api:local
+    depends_on:
+      create-bucket: {condition: service_completed_successfully}
+    environment:
+      <<: *s3
+      MODEL_RELOAD_SECONDS: "30"
+    ports: ["8080:8080"]
+
+  dashboard:
+    build: {context: ../.., dockerfile: docker/dashboard.Dockerfile}
+    image: ghcr.io/renzoal7/lima-rent-dashboard:local
+    depends_on: [api]
+    environment:
+      <<: *s3
+      API_URL: http://api:8080
+    ports: ["8501:8501"]
+
+  pipeline:
+    build: {context: ../.., dockerfile: docker/pipeline.Dockerfile}
+    image: ghcr.io/renzoal7/lima-rent-pipeline:local
+    profiles: [jobs]
+    depends_on:
+      mlflow: {condition: service_started}
+    environment:
+      <<: *s3
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      OPTUNA_TRIALS: "20"
+    command: ["lima-rent", "weekly"]
+
+volumes:
+  s3:
+  postgres:

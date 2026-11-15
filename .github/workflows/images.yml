@@ -1,0 +1,175 @@
+name: Imagenes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - scripts/**
+      - docker/**
+      - deploy/k3s/**
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/images.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # La VM de K3s-Cortex es ARM64 (Ampere A1): se construye solo esa arquitectura, en un
+    # runner ARM nativo. Sin QEMU ni imágenes multi-plataforma.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, dashboard, pipeline, mlflow]
+    env:
+      # Las mismas restricciones que el securityContext de los manifiestos.
+      HARDENED: >-
+        --read-only --tmpfs /tmp:rw,nosuid,size=512m --cap-drop ALL
+        --security-opt no-new-privileges
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Construir
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/${{ matrix.image }}.Dockerfile
+          platforms: linux/arm64
+          build-args: VCS_REF=${{ github.sha }}
+          load: true
+          tags: check:${{ matrix.image }}
+          # Capas reutilizadas entre ejecuciones: solo se reconstruye lo que cambió.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+      - name: Probar
+        run: |
+          espera() {
+            for attempt in $(seq 1 40); do curl -fsS "$1" > /dev/null && return 0; sleep 1; done
+            return 1
+          }
+          case "${{ matrix.image }}" in
+            pipeline)
+              # Una semana sintética completa dentro de la imagen: limpia, entrena y promueve.
+              docker run --rm $HARDENED -e DATA_URI=/tmp/data \
+                -e MLFLOW_TRACKING_URI=sqlite:////tmp/mlflow.db -e OPTUNA_TRIALS=2 \
+                check:pipeline sh -c 'lima-rent weekly --fixture 300 &&
+                  test -s /tmp/data/models/champion/meta.json'
+              ;;
+            api)
+              docker run -d --name check $HARDENED -p 127.0.0.1:8080:8080 check:api
+              espera http://127.0.0.1:8080/api/health
+              # Sin champion en el lago, la API está viva pero no lista.
+              test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/ready)" = 503
+              ;;
+            dashboard)
+              docker run -d --name check $HARDENED -p 127.0.0.1:8501:8501 check:dashboard
+              espera http://127.0.0.1:8501/_stcore/health
+              ;;
+            mlflow)
+              docker run -d --name check $HARDENED -p 127.0.0.1:5000:5000 \
+                -e MLFLOW_BACKEND_STORE_URI=sqlite:////tmp/mlflow.db \
+                -e MLFLOW_ARTIFACTS_DESTINATION=/tmp/artifacts \
+                -e MLFLOW_ALLOWED_HOSTS=127.0.0.1,127.0.0.1:5000 check:mlflow
+              espera http://127.0.0.1:5000/health
+              ;;
+          esac
+          docker rm -f check 2> /dev/null || true
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publicar
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/${{ matrix.image }}.Dockerfile
+          platforms: linux/arm64
+          build-args: VCS_REF=${{ github.sha }}
+          # Reusa las capas de "Construir": publica la misma imagen que se probó.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          push: true
+          tags: ghcr.io/renzoal7/lima-rent-${{ matrix.image }}:sha-${{ github.sha }}
+          provenance: true
+      - name: Registrar digest inmutable
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          printf 'ghcr.io/renzoal7/lima-rent-%s@%s\n' "${{ matrix.image }}" "$DIGEST" | tee image.txt
+          printf 'Imagen: `ghcr.io/renzoal7/lima-rent-%s@%s`\n' "${{ matrix.image }}" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image }}
+          path: image.txt
+          retention-days: 30
+
+  promote:
+    name: Promover en K3s-Cortex
+    needs: publish
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clonar la infraestructura
+        uses: actions/checkout@v4
+        with:
+          repository: RenzoAL7/K3s-Cortex
+          token: ${{ secrets.CORTEX_REPO_TOKEN }}
+          path: cortex
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pyyaml>=6"
+      - name: Copiar los manifiestos y fijar los cuatro digests
+        id: pins
+        run: |
+          python scripts/promote.py cortex digests
+          git -C cortex diff --check
+          {
+            echo "images<<EOF"
+            cat digests/*/image.txt | sed 's/^/- `/; s/$/`/'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Renderizar sin contactar el clúster
+        run: kubectl kustomize cortex/apps/lima-rent-mlops/overlays/prod > /dev/null
+      - name: Publicar en K3s-Cortex
+        # Promoción automática: el commit va directo a main y Argo CD lo aplica al recibir
+        # el webhook de GitHub. Para revertir, revierte este commit en K3s-Cortex.
+        working-directory: cortex
+        env:
+          IMAGES: ${{ steps.pins.outputs.images }}
+        run: |
+          git add -A apps/lima-rent-mlops
+          if git diff --cached --quiet; then
+            echo "Los digests ya estaban desplegados."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'chore(lima-rent): promote %s\n\nOrigen: https://github.com/RenzoAL7/lima-rent-mlops/commit/%s\nWorkflow: https://github.com/RenzoAL7/lima-rent-mlops/actions/runs/%s\n%s\n' \
+            "$GITHUB_SHA" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$IMAGES" > "$RUNNER_TEMP/mensaje.txt"
+          git commit -q -F "$RUNNER_TEMP/mensaje.txt"
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+            sleep 5
+          done
+          echo "::error::No se pudo publicar en K3s-Cortex"
+          exit 1
