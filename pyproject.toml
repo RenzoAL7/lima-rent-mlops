@@ -1,21 +1,67 @@
 [project]
 name = "lima-rent-mlops"
 version = "0.1.0"
-description = "Add your description here"
+description = "Predicción de alquileres de departamentos en Lima con monitoreo de drift y reentrenamiento automático"
 readme = "README.md"
 authors = [
     { name = "Renzo Aguilar Luna", email = "renzo07aguilar@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
+# Base común a todas las imágenes: leer y escribir el lago de datos.
 dependencies = [
+    "boto3>=1.40",
+    "httpx>=0.28.1",
+    "numpy>=2.2",
+    "pandas>=2.2",
+    "pyarrow>=21",
+]
+
+[project.optional-dependencies]
+# Cada imagen instala solo su grupo (ver docker/*.Dockerfile).
+pipeline = [
+    "lightgbm>=4.6",
+    "mlflow>=3.4",
+    "optuna>=4.5",
+    "pandera>=0.26",
+    "scipy>=1.15",
+    "selectolax>=0.3.29",
+]
+api = [
+    "fastapi>=0.120",
+    "lightgbm>=4.6",
+    "uvicorn>=0.38",
+]
+dashboard = [
+    "streamlit>=1.50",
+]
+tracking = [
+    "mlflow>=3.4",
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
     "jupyter>=1.1.1",
     "matplotlib>=3.11.2",
-    "pandas>=3.1.1",
+    "pytest>=8.4",
+    "pyyaml>=6",
+    "ruff>=0.14",
 ]
 
 [project.scripts]
-lima-rent-mlops = "lima_rent_mlops:main"
+lima-rent = "lima_rent_mlops.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning"]

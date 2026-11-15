@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Perfil actual: VM Ampere A1 de 3 OCPU y 20 GB compartida con otras aplicaciones.
+# scripts/promote.py copia este overlay a K3s-Cortex y agrega los digests de las imágenes.
+resources:
+  - ../../base

@@ -1,0 +1,17 @@
+# Contexto de las imágenes: solo el código. Las dependencias se instalan dentro de cada imagen.
+.git
+.github
+.claude
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.ipynb_checkpoints
+data
+mlruns
+mlartifacts
+notebooks
+deploy
+docs
+tests
+.env

@@ -1,0 +1,87 @@
+name: Monitor
+
+# Revisa el sitio público cada 3 horas. Si algo falla abre (o actualiza) un issue, que GitHub
+# notifica por correo; cuando todo vuelve a estar bien, lo cierra.
+# Es la alerta del sistema: el pipeline semanal deja su estado en /api/status y aquí se
+# comprueba que la última corrida terminó bien y no tiene más de MAX_DIAS.
+on:
+  schedule:
+    - cron: "23 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  revisar:
+    name: Dashboard, API y pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE: https://lima-rent.renzoaguilar.dev
+      MAX_DIAS: "8"
+      TITULO: "Monitor: AlquiLima tiene un problema"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Revisar
+        id: revision
+        run: |
+          problemas=""
+          falla() { problemas="${problemas}- $1"$'\n'; }
+          codigo() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$1"; }
+
+          [ "$(codigo "$SITE/")" = 200 ] || falla "El dashboard no responde 200."
+          [ "$(codigo "$SITE/api/health")" = 200 ] || falla "La API no responde en /api/health."
+          [ "$(codigo "$SITE/api/ready")" = 200 ] || falla "La API no tiene un modelo champion cargado (/api/ready)."
+
+          prediccion=$(curl -s --max-time 20 -X POST "$SITE/api/predict" -H 'content-type: application/json' \
+            -d '{"distrito":"Miraflores","area_m2":70,"dormitorios":2,"banos":2}' || true)
+          echo "$prediccion" | grep -q '"estimado":[1-9]' || falla "La predicción de prueba falló: ${prediccion:-sin respuesta}."
+
+          estado=$(curl -s --max-time 20 "$SITE/api/status" || true)
+          resumen=$(echo "$estado" | python3 -c '
+          import json, sys
+          s = json.load(sys.stdin)
+          dias = s.get("dias_desde_ultima_corrida")
+          print(s.get("estado") or "sin-corridas", 999 if dias is None else int(dias))
+          ' 2>/dev/null || echo "ilegible 999")
+          read -r corrida dias <<< "$resumen"
+          [ "$corrida" = ok ] || falla "La última corrida del pipeline terminó en '$corrida'. Revisa el CronJob lima-rent-weekly."
+          [ "${dias%.*}" -le "$MAX_DIAS" ] || falla "La última corrida tiene $dias días. ¿Se suspendió el CronJob?"
+
+          {
+            echo "problemas<<EOF"
+            printf '%s' "$problemas"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ -n "$problemas" ]; then
+            printf '### Problemas\n%s' "$problemas" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Todo en orden." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Abrir o actualizar el aviso
+        if: steps.revision.outputs.problemas != ''
+        env:
+          PROBLEMAS: ${{ steps.revision.outputs.problemas }}
+        run: |
+          numero=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number --jq '.[0].number')
+          cuerpo=$(printf '%s\n\nRevisión: %s/%s/actions/runs/%s' "$PROBLEMAS" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
+          if [ -n "$numero" ]; then
+            gh issue comment "$numero" --repo "$GITHUB_REPOSITORY" --body "$cuerpo"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body "$cuerpo"
+          fi
+
+      - name: Cerrar el aviso si ya no hay problemas
+        if: steps.revision.outputs.problemas == ''
+        run: |
+          numero=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number --jq '.[0].number')
+          if [ -n "$numero" ]; then
+            gh issue close "$numero" --repo "$GITHUB_REPOSITORY" --comment "Todo volvió a responder bien."
+          fi

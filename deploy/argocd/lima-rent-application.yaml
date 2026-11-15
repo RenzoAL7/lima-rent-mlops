@@ -1,0 +1,28 @@
+# Se copia una sola vez a RenzoAL7/K3s-Cortex como clusters/rnz-prod/lima-rent-application.yaml
+# y se agrega a clusters/rnz-prod/kustomization.yaml (ver docs/despliegue.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lima-rent-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: lima-rent-mlops
+    app.kubernetes.io/managed-by: cortex-root
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/RenzoAL7/K3s-Cortex.git
+    targetRevision: main
+    path: apps/lima-rent-mlops/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lima-rent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
