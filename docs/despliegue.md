@@ -5,7 +5,7 @@ Lima Rent MLOps corre en el clúster [K3s-Cortex](https://github.com/RenzoAL7/K3
 ## Flujo
 
 1. Un push a `main` ejecuta CI (`ci.yml`): ruff, pytest, dos semanas simuladas y render de los manifiestos.
-2. `images.yml` construye las cuatro imágenes (`api`, `dashboard`, `pipeline` y `mlflow`) **solo para arm64**, en runners ARM nativos (`ubuntu-24.04-arm`), sin QEMU. Antes de publicar, prueba cada una con las restricciones del clúster: raíz de solo lectura, `/tmp` en tmpfs y sin capabilities. La imagen del pipeline corre una semana sintética completa.
+2. `images.yml` construye las cuatro imágenes (`api`, `dashboard`, `pipeline` y `mlflow`) **solo para arm64**, en runners ARM nativos (`ubuntu-24.04-arm`), sin QEMU. Antes de publicar, `scripts/probar-imagen.sh` prueba cada una con las restricciones del clúster: raíz de solo lectura, `/tmp` en tmpfs, sin capabilities y con el límite de memoria de su manifiesto. La imagen del pipeline corre una semana sintética completa.
 3. Las imágenes se publican en GHCR con el tag `sha-<commit>` y se guarda el digest de cada una.
 4. El job `promote` ejecuta `scripts/promote.py`, que copia `deploy/k3s` a `apps/lima-rent-mlops` en K3s-Cortex y fija los cuatro digests en el overlay `prod`. Después hace un commit directo en `main` de Cortex.
 5. El webhook de GitHub avisa a Argo CD, que sincroniza en segundos. Para revertir, se revierte ese commit en K3s-Cortex.

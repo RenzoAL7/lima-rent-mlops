@@ -33,11 +33,6 @@ jobs:
       fail-fast: false
       matrix:
         image: [api, dashboard, pipeline, mlflow]
-    env:
-      # Las mismas restricciones que el securityContext de los manifiestos.
-      HARDENED: >-
-        --read-only --tmpfs /tmp:rw,nosuid,size=512m --cap-drop ALL
-        --security-opt no-new-privileges
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -54,38 +49,8 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
       - name: Probar
-        run: |
-          espera() {
-            for attempt in $(seq 1 40); do curl -fsS "$1" > /dev/null && return 0; sleep 1; done
-            return 1
-          }
-          case "${{ matrix.image }}" in
-            pipeline)
-              # Una semana sintética completa dentro de la imagen: limpia, entrena y promueve.
-              docker run --rm $HARDENED -e DATA_URI=/tmp/data \
-                -e MLFLOW_TRACKING_URI=sqlite:////tmp/mlflow.db -e OPTUNA_TRIALS=2 \
-                check:pipeline sh -c 'lima-rent weekly --fixture 300 &&
-                  test -s /tmp/data/models/champion/meta.json'
-              ;;
-            api)
-              docker run -d --name check $HARDENED -p 127.0.0.1:8080:8080 check:api
-              espera http://127.0.0.1:8080/api/health
-              # Sin champion en el lago, la API está viva pero no lista.
-              test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/ready)" = 503
-              ;;
-            dashboard)
-              docker run -d --name check $HARDENED -p 127.0.0.1:8501:8501 check:dashboard
-              espera http://127.0.0.1:8501/_stcore/health
-              ;;
-            mlflow)
-              docker run -d --name check $HARDENED -p 127.0.0.1:5000:5000 \
-                -e MLFLOW_BACKEND_STORE_URI=sqlite:////tmp/mlflow.db \
-                -e MLFLOW_ARTIFACTS_DESTINATION=/tmp/artifacts \
-                -e MLFLOW_ALLOWED_HOSTS=127.0.0.1,127.0.0.1:5000 check:mlflow
-              espera http://127.0.0.1:5000/health
-              ;;
-          esac
-          docker rm -f check 2> /dev/null || true
+        # Raíz de solo lectura, sin capabilities y con el límite de memoria del manifiesto.
+        run: scripts/probar-imagen.sh "${{ matrix.image }}" "check:${{ matrix.image }}"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io

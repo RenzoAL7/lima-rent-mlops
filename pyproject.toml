@@ -20,7 +20,12 @@ dependencies = [
 # Cada imagen instala solo su grupo (ver docker/*.Dockerfile).
 pipeline = [
     "lightgbm>=4.6",
-    "mlflow>=3.4",
+    # Cliente ligero de MLflow: registra corridas y modelos sin el servidor ni su interfaz, y
+    # sin scikit-learn ni matplotlib. El servidor completo va en el extra "tracking".
+    "mlflow-skinny>=3.4",
+    # Para usar SQLite como backend de MLflow en local y en las pruebas.
+    "alembic>=1.16",
+    "sqlalchemy>=2.0",
     "optuna>=4.5",
     "pandera>=0.26",
     "scipy>=1.15",
