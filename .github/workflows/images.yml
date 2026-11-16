@@ -123,6 +123,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Verificar el token de K3s-Cortex
+        env:
+          CORTEX_REPO_TOKEN: ${{ secrets.CORTEX_REPO_TOKEN }}
+        run: |
+          if [ -z "$CORTEX_REPO_TOKEN" ]; then
+            echo "::error::Falta el secret CORTEX_REPO_TOKEN (PAT con Contents: write sobre RenzoAL7/K3s-Cortex). Créalo con: gh secret set CORTEX_REPO_TOKEN"
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - name: Clonar la infraestructura
         uses: actions/checkout@v4

@@ -1,6 +1,6 @@
 # Despliegue en producción
 
-AlquiLima corre en el clúster [K3s-Cortex](https://github.com/RenzoAL7/K3s-Cortex): una VM Ampere A1 de OCI (arm64, 3 OCPU / 20 GB, Always Free) compartida con otros proyectos. Lo gestiona Argo CD con el mismo flujo GitOps que peru-spend-tracker.
+Lima Rent MLOps corre en el clúster [K3s-Cortex](https://github.com/RenzoAL7/K3s-Cortex): una VM Ampere A1 de OCI (arm64, 3 OCPU / 20 GB, Always Free) compartida con otros proyectos. Lo gestiona Argo CD con el mismo flujo GitOps que peru-spend-tracker.
 
 ## Flujo
 

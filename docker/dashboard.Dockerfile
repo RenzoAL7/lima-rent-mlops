@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Dashboard AlquiLima (Streamlit). Solo arm64.
+# Dashboard Lima Rent MLOps (Streamlit). Solo arm64.
 FROM ghcr.io/astral-sh/uv:0.12.18 AS uv
 
 FROM python:3.12-slim-bookworm AS build

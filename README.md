@@ -1,4 +1,4 @@
-# AlquiLima · lima-rent-mlops
+# Lima Rent MLOps
 
 Estima el alquiler mensual de un departamento en Lima Metropolitana y vigila, semana a semana, si el modelo sigue acertando.
 
@@ -39,7 +39,7 @@ flowchart LR
     MLF[MLflow<br/>tracking + registry]
     PG[(Postgres)]
     API[FastAPI<br/>/api]
-    DASH[Streamlit<br/>AlquiLima]
+    DASH[Streamlit<br/>Lima Rent MLOps]
   end
   OS[(OCI Object Storage<br/>bronze · silver · models · monitoring)]
   IC & BCRP & ENAHO --> CJ

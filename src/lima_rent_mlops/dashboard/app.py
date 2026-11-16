@@ -1,4 +1,4 @@
-"""AlquiLima: dashboard del modelo de alquileres de Lima (Streamlit)."""
+"""Lima Rent MLOps: dashboard del modelo de alquileres de Lima (Streamlit)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import streamlit as st
 
 HERE = Path(__file__).parent
 
-st.set_page_config(page_title="AlquiLima", page_icon=":material/apartment:", layout="wide")
+st.set_page_config(page_title="Lima Rent MLOps", page_icon=":material/apartment:", layout="wide")
 
 pages = [
     st.Page(HERE / "pages" / "predictor.py", title="Predictor", icon=":material/calculate:",
@@ -23,7 +23,7 @@ pages = [
 ]
 
 with st.sidebar:
-    st.markdown("## AlquiLima")
+    st.markdown("## Lima Rent MLOps")
     st.caption("Alquiler de departamentos en Lima Metropolitana, con el modelo vigilado "
                "semana a semana.")
 

@@ -1,4 +1,4 @@
-"""API de AlquiLima.
+"""API de Lima Rent MLOps.
 
 Carga el champion desde models/champion/ del lago de datos (no depende de MLflow) y revisa
 cada MODEL_RELOAD_SECONDS si se promovió otra versión: un reentrenamiento llega a producción
@@ -139,6 +139,6 @@ def _require_model() -> RentModel:
     return model
 
 
-app = FastAPI(title="AlquiLima API", version=__version__, docs_url="/api/docs",
+app = FastAPI(title="Lima Rent MLOps API", version=__version__, docs_url="/api/docs",
               openapi_url="/api/openapi.json")
 app.include_router(router)
