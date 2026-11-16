@@ -1317,12 +1317,14 @@ dashboard = [
     { name = "streamlit" },
 ]
 pipeline = [
+    { name = "alembic" },
     { name = "lightgbm" },
-    { name = "mlflow" },
+    { name = "mlflow-skinny" },
     { name = "optuna" },
     { name = "pandera" },
     { name = "scipy" },
     { name = "selectolax" },
+    { name = "sqlalchemy" },
 ]
 tracking = [
     { name = "mlflow" },
@@ -1340,13 +1342,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", marker = "extra == 'pipeline'", specifier = ">=1.16" },
     { name = "boto3", specifier = ">=1.40" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.120" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "lightgbm", marker = "extra == 'api'", specifier = ">=4.6" },
     { name = "lightgbm", marker = "extra == 'pipeline'", specifier = ">=4.6" },
-    { name = "mlflow", marker = "extra == 'pipeline'", specifier = ">=3.4" },
     { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=3.4" },
+    { name = "mlflow-skinny", marker = "extra == 'pipeline'", specifier = ">=3.4" },
     { name = "numpy", specifier = ">=2.2" },
     { name = "optuna", marker = "extra == 'pipeline'", specifier = ">=4.5" },
     { name = "pandas", specifier = ">=2.2" },
@@ -1355,6 +1358,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=21" },
     { name = "scipy", marker = "extra == 'pipeline'", specifier = ">=1.15" },
     { name = "selectolax", marker = "extra == 'pipeline'", specifier = ">=0.3.29" },
+    { name = "sqlalchemy", marker = "extra == 'pipeline'", specifier = ">=2.0" },
     { name = "streamlit", marker = "extra == 'dashboard'", specifier = ">=1.50" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.38" },
 ]
