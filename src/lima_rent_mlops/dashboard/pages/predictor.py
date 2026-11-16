@@ -6,7 +6,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from lima_rent_mlops.dashboard.data import api, empty_state, model_info
+from lima_rent_mlops.dashboard.data import api, api_error_message, empty_state, model_info
 from lima_rent_mlops.districts import DISTRICTS
 
 st.title("Predictor")
@@ -16,7 +16,8 @@ st.caption("Ingresa las características del departamento. El modelo devuelve el
 info = model_info()
 districts = info["distritos"] if info else DISTRICTS
 if info is None:
-    st.warning("La API no responde todavía; el formulario funcionará cuando haya un modelo.")
+    empty_state("Todavía no hay un modelo entrenado. El formulario se habilita cuando el "
+                "pipeline publique el primero.")
 
 with st.form("predictor"):
     c1, c2, c3 = st.columns(3)
@@ -30,7 +31,8 @@ with st.form("predictor"):
     cocheras = c6.number_input("Cocheras", 0, 6, 1)
     precio = st.number_input("Precio del aviso (opcional, S/ al mes)", 0, 60_000, 0, step=100,
                              help="Si lo llenas, te digo si el aviso está caro, barato o en rango.")
-    submitted = st.form_submit_button("Estimar", type="primary", use_container_width=True)
+    submitted = st.form_submit_button("Estimar", type="primary", use_container_width=True,
+                                      disabled=info is None)
 
 if submitted:
     body = {"distrito": distrito, "area_m2": area, "dormitorios": dormitorios, "banos": banos,
@@ -38,7 +40,7 @@ if submitted:
     try:
         result = api("POST", "/api/predict", json=body)
     except Exception as error:
-        st.error(f"No se pudo obtener la predicción: {error}")
+        st.error(f"No se pudo obtener la predicción. {api_error_message(error)}")
         st.stop()
     low, high = result["intervalo_80"]
     m1, m2, m3 = st.columns(3)
@@ -63,5 +65,3 @@ if submitted:
     st.altair_chart(alt.layer(*layers).properties(height=90), use_container_width=True)
     st.caption(f"Modelo versión {result['version_modelo']}. Basado en avisos publicados (precio "
                "pedido), no en contratos cerrados.")
-elif info is None:
-    empty_state("Cuando el pipeline entrene el primer modelo, aquí aparecerán las estimaciones.")

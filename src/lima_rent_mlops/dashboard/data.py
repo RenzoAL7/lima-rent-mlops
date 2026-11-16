@@ -43,11 +43,31 @@ def api(method: str, path: str, **kwargs):
 
 
 @st.cache_data(ttl=TTL, show_spinner=False)
+def _model_info() -> dict:
+    return api("GET", "/api/model")
+
+
 def model_info() -> dict | None:
+    """Datos del modelo vigente, o None si la API aún no tiene uno. Solo se cachea el éxito:
+    así el formulario se habilita apenas aparece el primer modelo, sin esperar a que venza
+    la caché."""
     try:
-        return api("GET", "/api/model")
+        return _model_info()
     except Exception:
         return None
+
+
+def api_error_message(error: Exception) -> str:
+    """Explica un fallo de la API sin mostrar direcciones internas del clúster."""
+    if isinstance(error, httpx.HTTPStatusError):
+        try:
+            detail = error.response.json().get("detail")
+        except ValueError:
+            detail = None
+        if isinstance(detail, str) and detail:
+            return detail
+        return f"La API respondió con un error ({error.response.status_code})."
+    return "No se pudo conectar con la API. Intenta de nuevo en unos minutos."
 
 
 def empty_state(message: str) -> None:
