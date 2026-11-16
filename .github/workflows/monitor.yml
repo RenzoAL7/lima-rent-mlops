@@ -25,7 +25,7 @@ jobs:
     env:
       SITE: https://lima-rent.renzoaguilar.dev
       MAX_DIAS: "8"
-      TITULO: "Monitor: AlquiLima tiene un problema"
+      TITULO: "Monitor: Lima Rent MLOps tiene un problema"
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Revisar
