@@ -88,7 +88,7 @@ flowchart LR
 - **Promoción con regla explícita.** Champion y challenger se comparan sobre el mismo holdout. Cada decisión, con su razón, queda en MLflow y en `models/history.json`.
 - **Imágenes solo arm64.** La VM es Ampere A1. Se construyen de forma nativa en el Mac y en runners `ubuntu-24.04-arm`, sin QEMU ni manifiestos multi-arquitectura. Son multi-stage: el runtime solo trae Python y el entorno virtual.
 - **Cada imagen instala solo su extra de uv** (`pipeline`, `api`, `dashboard` y `tracking`). Un test bloquea los paquetes ajenos para detectar importaciones que fallarían dentro del contenedor.
-- **Imágenes recortadas y en dos capas.** `docker/podar-venv.sh` quita de cada entorno las pruebas de las librerías, las cabeceras C y los clientes sin uso (entre 22 % y 39 % menos al descargar), y el pipeline usa `mlflow-skinny` en vez de MLflow completo. Las dependencias van en una capa y el código en otra de ~100 KB, así que un despliegue normal solo descarga la segunda.
+- **Imágenes recortadas y en dos capas.** `docker/podar-venv.sh` quita de cada entorno las pruebas de las librerías, las cabeceras C y los clientes sin uso (entre 21 % y 39 % menos al descargar), y el pipeline usa `mlflow-skinny` en vez de MLflow completo. Las dependencias van en una capa y el código en otra de ~100 KB, así que un despliegue normal solo descarga la segunda.
 - **GitOps por digest.** Lo que corre en el clúster es exactamente la imagen que se probó. Revertir es revertir un commit en K3s-Cortex.
 
 ## Desarrollo local
