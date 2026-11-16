@@ -6,6 +6,13 @@ enableXsrfProtection = true
 [browser]
 gatherUsageStats = false
 
+# Dos variantes del tema: sin ellas Streamlit solo ofrece el claro y el botón de la barra
+# lateral (app.py) no tendría a qué cambiar. Por defecto sigue la preferencia del sistema.
 [theme]
-primaryColor = "#0f766e"
 font = "sans serif"
+
+[theme.light]
+primaryColor = "#0f766e"
+
+[theme.dark]
+primaryColor = "#2dd4bf"
